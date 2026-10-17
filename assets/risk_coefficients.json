@@ -1,0 +1,85 @@
+{
+  "feature_names": [
+    "pct_used",
+    "spare_deficit",
+    "media_err",
+    "temp",
+    "poh",
+    "crit_warn",
+    "realloc",
+    "smart_fail"
+  ],
+  "weights": [
+    -4.697804588984651,
+    7.429845312090747,
+    9.941529430355965,
+    8.69789527435887,
+    -0.87354708415801,
+    -0.6510568934500403,
+    5.733890585848942,
+    0.0
+  ],
+  "bias": -2.7106316706451126,
+  "data": "alibaba_dsn21_30d",
+  "exported_model": "hgb",
+  "metrics": {
+    "logistic": {
+      "pr_auc": 0.16328939312821195,
+      "roc_auc": 0.7590974409019928,
+      "brier": 0.037489502711394194,
+      "base_rate": 0.04109533957939603
+    },
+    "logistic_balanced": {
+      "pr_auc": 0.1824293397369595,
+      "roc_auc": 0.7886143967386201,
+      "brier": 0.1898535353813776,
+      "base_rate": 0.04109533957939603
+    },
+    "hgb": {
+      "pr_auc": 0.3898582034640535,
+      "roc_auc": 0.8478730095268404,
+      "brier": 0.030712672615821363,
+      "base_rate": 0.04109533957939603
+    }
+  },
+  "approx_explain": true,
+  "risk_thresholds": {
+    "medium": 0.19,
+    "high": 0.31,
+    "critical": 0.62
+  },
+  "global_importance": [
+    {
+      "feature": "poh",
+      "importance": 0.16868874885729268
+    },
+    {
+      "feature": "spare_deficit",
+      "importance": 0.14714349109689664
+    },
+    {
+      "feature": "realloc",
+      "importance": 0.12589985280945
+    },
+    {
+      "feature": "crit_warn",
+      "importance": 0.05821012963819329
+    },
+    {
+      "feature": "pct_used",
+      "importance": 0.048991666304472034
+    },
+    {
+      "feature": "media_err",
+      "importance": 0.03298994626641383
+    },
+    {
+      "feature": "temp",
+      "importance": 0.02787614090520508
+    },
+    {
+      "feature": "smart_fail",
+      "importance": 0.0
+    }
+  ]
+}

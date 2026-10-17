@@ -1,0 +1,99 @@
+{
+  "candidates": {
+    "logistic": {
+      "pr_auc": 0.16328939312821195,
+      "roc_auc": 0.7590974409019928,
+      "brier": 0.037489502711394194,
+      "base_rate": 0.04109533957939603
+    },
+    "logistic_balanced": {
+      "pr_auc": 0.1824293397369595,
+      "roc_auc": 0.7886143967386201,
+      "brier": 0.1898535353813776,
+      "base_rate": 0.04109533957939603
+    },
+    "hgb": {
+      "pr_auc": 0.3898582034640535,
+      "roc_auc": 0.8478730095268404,
+      "brier": 0.030712672615821363,
+      "base_rate": 0.04109533957939603
+    }
+  },
+  "exported": "hgb",
+  "per_model_ap": {
+    "MA1": 0.7657565661742249,
+    "MA2": 0.01628370485374496,
+    "MB1": 0.3903563162846548,
+    "MB2": 0.03351865315378413,
+    "MC1": 0.33947960845174485,
+    "MC2": 0.5484167026568225
+  },
+  "risk_thresholds": {
+    "medium": {
+      "threshold": 0.19,
+      "precision": 0.5447860962566845,
+      "recall": 0.26581865622961515,
+      "lift": 13.256639361846856,
+      "predicted_positives": 1496
+    },
+    "high": {
+      "threshold": 0.31,
+      "precision": 0.709613478691774,
+      "recall": 0.23352902804957598,
+      "lift": 17.267492760847095,
+      "predicted_positives": 1009
+    },
+    "critical": {
+      "threshold": 0.62,
+      "precision": 0.8575949367088608,
+      "recall": 0.17677756033920417,
+      "lift": 20.868423171245265,
+      "predicted_positives": 632
+    }
+  },
+  "global_importance": [
+    {
+      "feature": "poh",
+      "importance": 0.16868874885729268
+    },
+    {
+      "feature": "spare_deficit",
+      "importance": 0.14714349109689664
+    },
+    {
+      "feature": "realloc",
+      "importance": 0.12589985280945
+    },
+    {
+      "feature": "crit_warn",
+      "importance": 0.05821012963819329
+    },
+    {
+      "feature": "pct_used",
+      "importance": 0.048991666304472034
+    },
+    {
+      "feature": "media_err",
+      "importance": 0.03298994626641383
+    },
+    {
+      "feature": "temp",
+      "importance": 0.02787614090520508
+    },
+    {
+      "feature": "smart_fail",
+      "importance": 0.0
+    }
+  ],
+  "test_rows": 74607,
+  "test_positive_rate": 0.04109533957939603,
+  "score_quantiles": {
+    "0.5": 0.013029913393052057,
+    "0.9": 0.10653924859507215,
+    "0.99": 0.5336061302595557,
+    "0.999": 0.9375527928082572,
+    "1.0": 0.9771347242500515
+  },
+  "rows": 372930,
+  "positive_rate": 0.040034322795162634
+}

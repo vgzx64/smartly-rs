@@ -1,0 +1,17 @@
+{
+  "model_name": "TEST NVME 1",
+  "serial_number": "TEST-NVME-001",
+  "user_capacity": {"bytes": 512110190592},
+  "smart_status": {"passed": true},
+  "nvme_smart_health_information_log": {
+    "temperature": 39.0,
+    "percentage_used": 3.0,
+    "available_spare": 100.0,
+    "available_spare_threshold": 10.0,
+    "media_errors": 0,
+    "power_on_hours": 8760,
+    "unsafe_shutdowns": 150,
+    "critical_warning": 0,
+    "data_units_written": 987654321
+  }
+}

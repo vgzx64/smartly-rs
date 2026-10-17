@@ -1,0 +1,21 @@
+{
+  "model_name": "TEST SATA 1",
+  "serial_number": "TEST-SATA-001",
+  "user_capacity": {"bytes": 500107862016},
+  "smart_status": {"passed": true},
+  "temperature": {"current": 33.0},
+  "power_on_time": {"hours": 4000},
+  "ata_smart_data": {
+    "table": {
+      "entries": [
+        {"id": 5, "name": "Reallocated_Sector_Ct", "value": 100, "raw": {"value": 0}},
+        {"id": 9, "name": "Power_On_Hours", "value": 95, "raw": {"value": 4000}},
+        {"id": 12, "name": "Power_Cycle_Count", "value": 99, "raw": {"value": 500}},
+        {"id": 197, "name": "Current_Pending_Sector", "value": 100, "raw": {"value": 0}},
+        {"id": 198, "name": "Offline_Uncorrectable", "value": 100, "raw": {"value": 0}},
+        {"id": 233, "name": "SSD_Life_Left", "value": 97, "raw": {"value": 97}},
+        {"id": 241, "name": "Total_LBAs_Written_32MiB", "value": 99, "raw": {"value": 30000}}
+      ]
+    }
+  }
+}
