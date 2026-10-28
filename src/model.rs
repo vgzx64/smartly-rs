@@ -189,7 +189,12 @@ impl Health {
                         attr_raw(entries, 241).map(|w| w.saturating_mul(32 * 1024 * 1024));
                 }
             }
-            h.is_ssd = Some(true); // refined from lsblk by the collector
+
+            // smartctl JSON may carry a top-level rotation_rate (rpm):
+            // >0  -> rotational HDD, 0 -> SSD, absent -> leave lsblk's hint.
+            if let Some(rr) = v.get("rotation_rate").and_then(loose_u64) {
+                h.is_ssd = if rr > 0 { Some(false) } else { Some(true) };
+            }
         }
 
         h

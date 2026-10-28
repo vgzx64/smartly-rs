@@ -21,7 +21,7 @@ import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
 
 ROOT = Path(__file__).resolve().parent.parent
-TRAIN_CSV = ROOT / "assets/train.csv"
+TRAIN_CSV = ROOT / "assets/risk/train.csv"
 OUT = ROOT / "tests/fixtures/features_real.json"
 
 FEATURE_NAMES = [

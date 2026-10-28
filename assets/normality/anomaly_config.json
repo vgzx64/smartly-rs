@@ -1,0 +1,21 @@
+{
+  "method": "isolation_forest",
+  "feature_names": [
+    "pct_used",
+    "spare_deficit",
+    "media_err",
+    "temp",
+    "poh",
+    "crit_warn",
+    "realloc",
+    "smart_fail"
+  ],
+  "contamination": 0.02,
+  "alarm_threshold": -0.6617897916965528,
+  "healthy_count": 161729,
+  "n_features": 8,
+  "score_reference": {
+    "min": -0.7949869543579221,
+    "max": -0.3582338958105989
+  }
+}

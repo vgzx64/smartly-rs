@@ -63,6 +63,6 @@ pub fn scenario(name: &str) -> Result<Health> {
             smart_passed: Some(false),
             ..base
         }),
-        other => bail!("неизвестный демо-сценарий `{other}`; доступны: healthy, worn, critical"),
+        other => bail!("unknown demo scenario `{other}`; available: healthy, worn, critical"),
     }
 }

@@ -15,31 +15,34 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::advise::assess;
-use crate::infer::predict;
+use crate::infer::{RiskResult, predict};
 use crate::report::Report;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "smartly-rs",
     version,
-    about = "Диагностика SSD: состояние, риск потери данных, восстановление, удаление"
+    about = "SSD health diagnostics: state, data-loss risk, recovery, erase without recovery"
 )]
 struct Cli {
-    /// Устройство, например /dev/nvme0n1 или /dev/sda (нужен smartctl; часто sudo).
+    /// Device path, e.g. /dev/nvme0n1 or /dev/sda (requires smartctl; often sudo).
     #[arg(long)]
     disk: Option<String>,
-    /// Демо-режим без обращения к диску: healthy | worn | critical.
+    /// Demo mode without touching the disk: healthy | worn | critical.
     #[arg(long)]
     demo: Option<String>,
-    /// Показать все блочные устройства (lsblk).
+    /// List all block devices (lsblk).
     #[arg(long)]
     list: bool,
-    /// JSON-отчёт вместо текстового.
+    /// JSON report instead of text report.
     #[arg(long)]
     json: bool,
-    /// Полная интерпретация модели (все 8 признаков).
+    /// Full model interpretation (all 8 features).
     #[arg(long)]
     explain: bool,
+    /// Confirm device is not system, before printing erase commands.
+    #[arg(long)]
+    force: bool,
 }
 
 fn main() -> Result<()> {
@@ -47,9 +50,9 @@ fn main() -> Result<()> {
 
     if cli.list {
         for d in collect::list_block_devices()? {
-            let mark = match d.rota {
-                Some(false) => "SSD",
-                Some(true) => "HDD",
+            let mark = match collect::infer_is_ssd(d.rota, d.tran.as_deref()) {
+                Some(true) => "SSD",
+                Some(false) => "HDD",
                 None => " ? ",
             };
             let tran = d.tran.as_deref().unwrap_or("-");
@@ -66,13 +69,40 @@ fn main() -> Result<()> {
     let health = if let Some(name) = &cli.demo {
         demo::scenario(name)?
     } else if let Some(dev) = &cli.disk {
-        collect::probe(dev).context("сбор диагностики")?
+        if !cli.force && collect::is_root_device(dev)? {
+            anyhow::bail!(
+                "device {dev} contains the root filesystem (/). \
+                 I will not print erase commands for a system drive. \
+                 If this is really the target, rerun with --force."
+            );
+        }
+        collect::probe(dev).context("collecting diagnostics")?
     } else {
-        anyhow::bail!("укажите --disk /dev/... или --demo healthy|worn|critical (или --list)");
+        anyhow::bail!("provide --disk /dev/... or --demo healthy|worn|critical (or --list)");
     };
 
     let feats = features::extract(&health);
-    let risk = predict(&feats);
+    let risk = if health.is_ssd == Some(false) {
+        // The risk model was trained exclusively on SSDs (Alibaba DSN'21).
+        // An HDD is out of distribution — a probability would be meaningless.
+        RiskResult {
+            probability: 0.0,
+            engine: "n/a".into(),
+            error: Some("risk model trained only on SSDs; for HDDs probability not applicable".into()),
+            proxy_probability: 0.0,
+            approx_explain: true,
+            contributions: vec![],
+        }
+    } else {
+        let mut risk = predict(&feats);
+        // Safety override: the ML model was trained on data where SMART self-test
+        // was always passed, so `smart_fail` carries zero model weight. A drive
+        // that self-reports FAILED must not show a low risk number.
+        if health.smart_passed == Some(false) && risk.probability < 0.50 {
+            risk.probability = 0.50;
+        }
+        risk
+    };
     let assessment = assess(&health, &risk);
     let report = Report::new(health, &feats, risk, assessment);
 

@@ -1,0 +1,24 @@
+{
+  "method": "isolation_forest",
+  "feature_names": [
+    "pct_used",
+    "spare_deficit",
+    "media_err",
+    "temp",
+    "poh",
+    "crit_warn",
+    "realloc",
+    "smart_fail"
+  ],
+  "contamination": 0.02,
+  "train_data": "alibaba_dsn21_30d (label=0 healthy only)",
+  "train_rows": 358000,
+  "eval_healthy_rows": 358000,
+  "eval_prefail_rows": 14930,
+  "healthy_score_min": -0.8107892729390349,
+  "healthy_score_median": -0.34742443402717926,
+  "healthy_score_max": -0.31964032423458416,
+  "prefail_score_min": -0.814420912434743,
+  "prefail_score_median": -0.4160223277274518,
+  "prefail_score_max": -0.31964032423458416
+}

@@ -19,7 +19,7 @@ FEATURE_NAMES = [
 
 
 def main() -> int:
-    path = sys.argv[1] if len(sys.argv) > 1 else "assets/train.csv"
+    path = sys.argv[1] if len(sys.argv) > 1 else "assets/risk/train.csv"
     df = pd.read_csv(path, usecols=FEATURE_NAMES + ["label"])
     print(f"{path}: rows {len(df)} base rate {df['label'].mean():.4f}\n")
 

@@ -56,10 +56,10 @@ nvme id-ctrl /dev/nvmeXn1 -o json  # capabilities sanitize (опциональн
 - **На чём обучена**: реальный датасет **Alibaba ssd_smart_logs** (Tianchi
   `dataId=95044`, Xu et al., DSN 2021): ежедневные SMART-срезы ~400 тыс.
   SATA-SSD (2018–2019). Подробности — `docs/dataset.md`.
-- **Выбор модели** (`assets/train_risk_model.py`): сравниваются логистическая
+- **Выбор модели** (`assets/risk/train_risk_model.py`): сравниваются логистическая
   регрессия, её balanced-вариант и histogram gradient boosting; тест —
   сгруппированный по `model#disk_id` (срезы одного диска не разрываются).
-  Победитель по PR-AUC экспортируется в `assets/risk_model.onnx`
+  Победитель по PR-AUC экспортируется в `assets/risk/risk_model.onnx`
   (sklearn + skl2onnx, opset 15):
 
 | модель | PR-AUC | ROC-AUC | Brier |
@@ -72,9 +72,9 @@ nvme id-ctrl /dev/nvmeXn1 -o json  # capabilities sanitize (опциональн
 - **Инференс в Rust**: крейт `ort` (ONNX Runtime), модель вшита в бинарник
   через `include_bytes!` — работает офлайн. Если ONNX-рантайм недоступен,
   применяется логистическая формула по коэффициентам
-  (`assets/risk_coefficients.json`).
+  (`assets/risk/risk_coefficients.json`).
 - **Уровни риска**: пороги не зашиты в код, а выводятся на тестовой выборке
-  (`assets/train_metrics.json`) как наименьший скор, при котором точность
+  (`assets/risk/train_metrics.json`) как наименьший скор, при котором точность
   срабатываний достигает цели, и читаются из JSON при старте:
 
 | уровень | порог | precision | recall | lift |
@@ -156,18 +156,18 @@ docs/dataset.md EDA датасета Alibaba DSN'21, маппинг полей �
 # 2) сборка обучающей выборки → assets/train.csv
 #    позитив: срез за 1–30 дней до failure_time (горизонт 30 дней)
 #    негатив: ~500 случайных «здоровых» дисков в день (~1:20)
-.venv/bin/python assets/build_train_alibaba.py
+.venv/bin/python assets/risk/build_train_alibaba.py
 
 # 2b) диагностика: какие признаки вообще различают отказы (маргиналы,
 #     коллинеарность) — вход для раздела про интерпретацию в docs/dataset.md
-.venv/bin/python assets/analyze_train_marginals.py
+.venv/bin/python assets/risk/analyze_train_marginals.py
 
 # 3) обучение v2 (кандидаты: logistic / logistic_balanced / HGB;
-#    split по model#disk_id без утечек; метрики → assets/train_metrics.json)
-.venv/bin/python assets/train_risk_model.py --data assets/train.csv
+#    split по model#disk_id без утечек; метрики → assets/risk/train_metrics.json)
+.venv/bin/python assets/risk/train_risk_model.py --data assets/risk/train.csv
 
 # 4) выборка реальных held-out сэмплов для Rust-тестов + прогон тестов
-.venv/bin/python assets/make_features_fixture.py
+.venv/bin/python assets/risk/make_features_fixture.py
 cargo test
 ```
 
@@ -187,14 +187,14 @@ cargo test
 Переобучить синтетическую модель (для сравнения/демо):
 
 ```bash
-.venv/bin/python assets/train_risk_model.py   # без --data
+.venv/bin/python assets/risk/train_risk_model.py   # без --data
 ```
 
 ## Результаты v2 и ограничения
 
 Тест (20% дисков, никогда не виденные моделью) — PR-AUC **0.390** у HGB против
 0.163 у логистической регрессии при базовой частоте 0.041. Разбивка по моделям
-дисков (AP на тесте, `assets/train_metrics.json`):
+дисков (AP на тесте, `assets/risk/train_metrics.json`):
 
 | MA1 | MC2 | MB1 | MC1 | MB2 | MA2 |
 |---|---|---|---|---|---|
@@ -217,14 +217,36 @@ cargo test
 - Объяснения всегда строятся по коэффициентам логистической регрессии; для
   экспортированной HGB это приближение (`approx_explain: true`), и его
   собственный скор печатается рядом (`proxy_probability`). Диагностика
-  маргиналов (`assets/analyze_train_marginals.py`) показывает, почему этим
+  маргиналов (`assets/risk/analyze_train_marginals.py`) показывает, почему этим
   вкладам нельзя верить буквально: `media_err`, `temp`, `crit_warn` в
   выборке почти константны.
 - Уровни риска (`низкий/средний/высокий/критический`) — не константы, а
   пороги 0.19 / 0.31 / 0.62, выведенные на тестовой выборке под precision
-  0.54 / 0.71 / 0.86 и вшитые в `risk_coefficients.json`.
+  0.54 / 0.71 / 0.86 и вшитые в `assets/risk/risk_coefficients.json`.
 
 
+
+## Модель нормальности (неконтролируемая, SMART)
+
+Пока в `notebooks/SMART` нет меток отказа за 30 дней, contrôle риска
+осуществляется через **неконтролируемую модель нормальности**: изучается
+профиль "здорового" SSD, а значительные отклонения трактуются как тревога.
+
+- **Данные**: `notebooks/SMART/parsed_smart_records.csv` (168 787 записей,
+  233 столбца) — парсинг через `assets/smart/extract_smart_features.py`,
+  покрытие признаков — `assets/smart/coverage_analysis.py`.
+- **Обучение**: `assets/normality/train_normal_model.py` — IsolationForest
+  обучается на "здоровых" записях (без `self_test == FAILED`,
+  `media_err > 0`, `crit_warn > 0`, `pct_used >= 0.90`).
+- **Вывод**: `assets/normality/anomaly_config.json` — порог тревоги
+  (1-й процентиль здоровых ≈ 1% ложных срабатываний),
+  `assets/normality/normal_model.joblib` — fitted IsolationForest.
+- **Инференс**: `assets/normality/detect_anomaly.py` — scores a device's
+  8-feature vector, печатает `NORMAL` / `ALARM`.
+
+Валидация на обучающей выборке:healthy — 0.98% тревог (цель ≈1%),
+устройства с признаками неисправности — 66% тревог (слабый сигнал,
+не ground truth).
 
 ## Тесты
 

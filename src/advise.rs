@@ -98,30 +98,30 @@ fn classify(h: &Health) -> (DriveState, Vec<String>) {
     let mut state = DriveState::Ok;
 
     if h.smart_passed == Some(false) {
-        reasons.push("SMART-самотест сообщил FAILED".into());
+        reasons.push("SMART self-test reported FAILED".into());
         state = bump(DriveState::Critical, state);
     }
     if let (Some(spare), Some(thr)) = (h.available_spare, h.spare_threshold) {
         if spare <= thr {
             reasons.push(format!(
-                "available_spare {spare:.0}% ≤ порога {thr:.0}% — ресурс резервных блоков исчерпан"
+                "available_spare {spare:.0}% <= threshold {thr:.0}% — spare block resource exhausted"
             ));
             state = bump(DriveState::Critical, state);
         } else if spare <= thr + 10.0 {
             reasons.push(format!(
-                "available_spare {spare:.0}% близок к порогу {thr:.0}%"
+                "available_spare {spare:.0}% close to threshold {thr:.0}%%"
             ));
             state = bump(DriveState::Warning, state);
         }
     }
     if h.read_only_mode {
-        reasons.push("контроллер перешёл в режим read-only (critical_warning bit3)".into());
+        reasons.push("controller switched to read-only mode (critical_warning bit3)".into());
         state = bump(DriveState::Critical, state);
     }
     if let Some(cw) = h.critical_warning {
         if cw & 0b011 != 0 {
             reasons.push(format!(
-                "NVMe critical_warning = 0x{cw:02x} (перегрев / запас ниже порога)"
+                "NVMe critical_warning = 0x{cw:02x} (overheat / spare below threshold)"
             ));
             state = bump(DriveState::Warning, state);
         }
@@ -132,17 +132,17 @@ fn classify(h: &Health) -> (DriveState, Vec<String>) {
     }
     if let Some(pu) = h.percentage_used {
         if pu >= 95.0 {
-            reasons.push(format!("износ {pu:.0}% — ресурс почти исчерпан"));
+            reasons.push(format!("wear {pu:.0}% — resource almost exhausted"));
             state = bump(DriveState::Critical, state);
         } else if pu >= 70.0 {
-            reasons.push(format!("износ {pu:.0}% — ресурс заметно израсходован"));
+            reasons.push(format!("wear {pu:.0}% — resource significantly consumed"));
             state = bump(DriveState::Warning, state);
         }
     }
     if let Some(m) = h.media_errors {
         if m >= 100 {
             reasons.push(format!(
-                "media_errors = {m} — накапливаются неисправимые ошибки чтения"
+                "media_errors = {m} — uncorrectable read errors accumulating"
             ));
             state = bump(DriveState::Critical, state);
         } else if m > 0 {
@@ -153,13 +153,13 @@ fn classify(h: &Health) -> (DriveState, Vec<String>) {
     if let Some(u) = h.uncorr_errors
         && u > 0
     {
-        reasons.push(format!("некорректируемые ошибки чтения (attr 198) = {u}"));
+        reasons.push(format!("uncorrectable read errors (attr 198) = {u}"));
         state = bump(DriveState::Warning, state);
     }
     if let Some(p) = h.pending_sectors
         && p > 0
     {
-        reasons.push(format!("pending-сектора (attr 197) = {p}"));
+        reasons.push(format!("pending sectors (attr 197) = {p}"));
         state = bump(DriveState::Warning, state);
     }
     if let Some(r) = h.realloc_sectors
@@ -170,18 +170,18 @@ fn classify(h: &Health) -> (DriveState, Vec<String>) {
     }
     if let Some(t) = h.temperature_c {
         if t >= 75.0 {
-            reasons.push(format!("температура {t:.0}°C — критически высоко"));
+            reasons.push(format!("temperature {t:.0}C — critically high"));
             state = bump(DriveState::Critical, state);
         } else if t >= 60.0 {
-            reasons.push(format!("температура {t:.0}°C выше нормы"));
+            reasons.push(format!("temperature {t:.0}C above normal"));
             state = bump(DriveState::Warning, state);
         }
     }
     if h.is_ssd == Some(false) {
-        reasons.push("устройство не SSD (вращающийся диск) — SMART-пороги SSD неприменимы".into());
+        reasons.push("device is not SSD (rotating disk) — SSD SMART thresholds not applicable".into());
     }
     if reasons.is_empty() {
-        reasons.push("отклонений SMART не обнаружено".into());
+        reasons.push("no SMART deviations detected".into());
     }
     (state, reasons)
 }
@@ -194,46 +194,46 @@ pub fn assess(h: &Health, risk: &RiskResult) -> Assessment {
         DriveState::Ok => RecoveryAdvice {
             feasibility: Feasibility::High,
             explanation:
-                "Диск работоспособен. Файлы, потерянные на исправном SSD, восстанавливаются \
-                 обычным ПО, НО: после TRIM контроллер уже обнуллил свободные блоки, поэтому \
-                 «удалённые» файлы на SSD обычно невосстановимы без бэкапа."
+                "Disk is healthy. Files lost on a healthy SSD are recoverable \
+                 with standard software, BUT: after TRIM the controller has already zeroed freed blocks, so \
+                 deleted files on SSD are typically unrecoverable without a backup."
                     .into(),
             steps: vec![
-                "Немедленно сделайте бэкап важных данных (rsync/restic/borg).".into(),
-                "Восстановление целостности ФС: PhotoRec, R-Studio, UFS Explorer — с другого диска."
+                "Back up important data immediately (rsync/restic/borg).".into(),
+                "Filesystem integrity check: PhotoRec, R-Studio, UFS Explorer — from another disk."
                     .into(),
-                "TRIM + бэкапы — лучшая «защита от восстановления» после удаления файлов.".into(),
-                "Регулярно сохраняйте smartctl -a отчёт для отслеживания динамики износа.".into(),
+                "TRIM + backups are the best \"protection against recovery\" after file deletion.".into(),
+                "Regularly save smartctl -a reports to track wear trends.".into(),
             ],
         },
         DriveState::Warning => RecoveryAdvice {
             feasibility: Feasibility::Medium,
             explanation:
-                "Есть признаки деградации. Существующие данные ещё читаются, но отказ может \
-                 наступить в любой момент: шансы на восстановление падают с каждым часом работы диска."
+                "Signs of degradation. Existing data is still readable, but failure can \
+                 occur at any moment: recovery chances drop with every hour of disk operation."
                     .into(),
             steps: vec![
-                "Приоритет №1: полный образ диска: sudo ddrescue /dev/sdX image.img mapfile".into(),
-                "Не записывайте новые данные на этот диск и не запускайте на нём fsck.".into(),
-                "Восстанавливайте файлы уже с образа, по возможности сразу.".into(),
-                "Запланируйте замену диска; сохраните SMART-отчёт как доказательство деградации."
+                "Priority #1: full disk image: sudo ddrescue /dev/sdX image.img mapfile".into(),
+                "Do not write new data to this disk and do not run fsck on it.".into(),
+                "Restore files from the image, as soon as possible.".into(),
+                "Plan disk replacement; save SMART report as proof of degradation."
                     .into(),
             ],
         },
         DriveState::Critical => RecoveryAdvice {
             feasibility: Feasibility::Low,
             explanation:
-                "Диск критически неисправен (исчерпан spare-ресурс, read-only режим или массовые \
-                 media errors). Чтение может обрываться; многократные попытки ускоряют деградацию. \
-                 При физическом отказе контроллера поможет только лаборатория (PC-3000, DeepSpar)."
+                "Disk is critically failing (spare exhausted, read-only mode or mass \
+                 media errors). Read may abort; repeated attempts accelerate degradation. \
+                 On physical controller failure only a lab (PC-3000, DeepSpar) can help."
                     .into(),
             steps: vec![
-                "НЕМЕДЛЕННО: ddrescue (несколько проходов, малое число повторов), не включайте диск повторно без нужды."
+                "IMMEDIATELY: ddrescue (multiple passes, few retries), do not power the disk on again without need."
                     .into(),
-                "Подключайте напрямую (без USB-мостов), отключите автоматический fsck/монтирование."
+                "Connect directly (no USB bridges), disable automatic fsck/mounting."
                     .into(),
-                "НЕ делайте badblocks/переразметку — это уничтожает данные.".into(),
-                "Если диск не определяется физически — только лаборатория восстановления данных."
+                "Do NOT run badblocks/repartition — this destroys data.".into(),
+                "If the disk is not physically detected — only a data recovery lab."
                     .into(),
             ],
         },
@@ -250,18 +250,18 @@ pub fn assess(h: &Health, risk: &RiskResult) -> Assessment {
 
 fn erase_advice(h: &Health) -> EraseAdvice {
     let mut warnings = vec![
-        "smartly-rs НЕ выполняет удаление — команды приведены только для справки; перед \
-         любым стиранием сделайте резервную копию и перепроверьте имя устройства."
+        "smartly-rs does NOT perform deletion — commands are for reference only; before \
+         erasing make a backup and double-check the device name."
             .into(),
-        "Повторная запись (shred/wipe) на SSD ненадёжна из-за wear-leveling и over-provisioning: \
-         часть старых страниц может остаться в резервных зонах."
+        "Repeated writes (shred/wipe) on SSD are unreliable due to wear-leveling and over-provisioning: \
+         some old pages may remain in spare areas."
             .into(),
     ];
 
     if h.encryption_active {
         warnings.push(
-            "Диск/раздел под шифрованием (LUKS/dm-crypt): уничтожение ключа делает данные \
-             нечитаемыми мгновенно и гарантированно."
+            "Disk/partition encrypted (LUKS/dm-crypt): destroying the key makes data \
+             instantly and guaranteed unreadable."
                 .into(),
         );
     }
@@ -269,12 +269,12 @@ fn erase_advice(h: &Health) -> EraseAdvice {
     if h.is_ssd == Some(false) {
         return EraseAdvice {
             verdict: EraseVerdict::Yes,
-            summary: "Это вращающийся HDD: данные можно уничтожить многократной перезаписью; \
-                 после неё чтение физически невозможно."
+            summary: "This is a rotating HDD: data can be destroyed by multiple overwrites; \
+                 afterwards physical reading is impossible."
                 .into(),
             methods: vec![
-                "sudo nwipe /dev/sdX             (надёжное затирание с журналом)".into(),
-                "sudo shred -uzn 3 /dev/sdX      (3 прохода + удаление)".into(),
+                "sudo nwipe /dev/sdX             (reliable wiping with journal)".into(),
+                "sudo shred -uzn 3 /dev/sdX      (3 passes + deletion)".into(),
                 "sudo dd if=/dev/urandom of=/dev/sdX bs=4M status=progress".into(),
             ],
             warnings,
@@ -288,30 +288,30 @@ fn erase_advice(h: &Health) -> EraseAdvice {
         if h.sanitize_supported == Some(false) && h.crypto_erase_supported == Some(false) {
             (
                 vec![
-                    "nvme format /dev/nvmeXn1 --ses=1   (user-data erase: контроллер затирает данные сам)"
+                    "nvme format /dev/nvmeXn1 --ses=1   (user-data erase: controller erases data itself)"
                         .into(),
-                    "blkdiscard /dev/nvmeXn1            (быстрый discard — логически, не физически)"
+                    "blkdiscard /dev/nvmeXn1            (fast discard — logical, not physical)"
                         .into(),
                 ],
                 EraseVerdict::Yes,
-                "Sanitize недоступен, но обязательная команда Format NVM (ses=1) уничтожает \
-                 данные; после неё чтение старых данных невозможно.",
+                "Sanitize unavailable, but mandatory Format NVM (ses=1) destroys data \
+                 data; afterwards reading old data is impossible.",
             )
         } else {
             (
                 vec![
-                    "nvme format /dev/nvmeXn1 --ses=2    (crypto-erase: ключи уничтожаются)".into(),
-                    "nvme sanitize /dev/nvmeXn1 -a 2     (crypto erase) или -a 1 (block erase)"
+                    "nvme format /dev/nvmeXn1 --ses=2    (crypto-erase: keys are destroyed)".into(),
+                    "nvme sanitize /dev/nvmeXn1 -a 2     (crypto erase) or -a 1 (block erase)"
                         .into(),
                 ],
                 EraseVerdict::Yes,
-                "NVMe поддерживает Sanitize/Format NVM (в т.ч. crypto-erase): контроллер \
-                 необратимо уничтожает данные, включая резервные зоны — восстановление невозможно.",
+                "NVMe supports Sanitize/Format NVM (including crypto-erase): controller \
+                 immediately and irrevocably destroys data including spare areas — recovery impossible.",
             )
         }
     } else if usb_bridge {
         warnings.push(
-            "USB-мост может не пропускать ATA Sanitize/TRIM — проверьте поддержку через hdparm -I"
+            "USB bridge may not pass through ATA Sanitize/TRIM — check support via hdparm -I"
                 .into(),
         );
         (
@@ -319,12 +319,12 @@ fn erase_advice(h: &Health) -> EraseAdvice {
                 "hdparm --user-master u --security-set-pass p /dev/sdX && \
                  hdparm --user-master u --security-erase p /dev/sdX"
                     .into(),
-                "sudo blkdiscard /dev/sdX           (только логически; не гарантирует стирание OP)"
+                "sudo blkdiscard /dev/sdX           (logical only; does not guarantee OP erasure)"
                     .into(),
             ],
             EraseVerdict::Partial,
-            "SSD в USB-корпусе: ATA Secure Erase недоступен через часть мостов, discard — только \
-             логический. Полное уничтожение физических остатков не гарантируется.",
+            "SSD in USB enclosure: ATA Secure Erase unavailable through some bridges, discard — only \
+             logical. Complete destruction of physical remnants not guaranteed.",
         )
     } else {
         (
@@ -332,12 +332,12 @@ fn erase_advice(h: &Health) -> EraseAdvice {
                 "hdparm --user-master u --security-set-pass p /dev/sdX && \
                  hdparm --user-master u --security-erase p /dev/sdX (ATA Secure Erase)"
                     .into(),
-                "sudo sg_sanitize /dev/sdX -c       (ATA Sanitize, если поддерживается)".into(),
-                "sudo blkdiscard -f /dev/sdX         (быстрый TRIM-обнул всего устройства)".into(),
+                "sudo sg_sanitize /dev/sdX -c       (ATA Sanitize, if supported)".into(),
+                "sudo blkdiscard -f /dev/sdX         (fast TRIM zeroing of entire device)".into(),
             ],
             EraseVerdict::Yes,
-            "Нативный SATA SSD: ATA Secure Erase/Sanitize стирает данные и резервные зоны — \
-             восстановление невозможно.",
+            "Native SATA SSD: ATA Secure Erase/Sanitize erases data and spare areas — \
+             recovery impossible.",
         )
     };
 

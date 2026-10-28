@@ -15,6 +15,9 @@ pub struct Report {
     pub features: Vec<(String, f32)>,
     pub risk: RiskResult,
     pub assessment: Assessment,
+    /// Honest provenance warning: the ML model was trained on data-center
+    /// SATA SSDs, so the probability is an extrapolation on other devices.
+    pub model_caveat: String,
 }
 
 impl Report {
@@ -28,6 +31,8 @@ impl Report {
                 .collect(),
             risk,
             assessment,
+            model_caveat: "ML model trained on data-center SATA SSDs (Alibaba DSN'21); probability for other device types is an extrapolation, not an absolute assessment."
+                .to_string(),
         }
     }
 
@@ -63,10 +68,10 @@ pub fn print_text(r: &Report, explain: bool) {
     let h = &r.health;
     let a = &r.assessment;
 
-    println!("{}", color(c, "1", "=== 1. СОСТОЯНИЕ SSD ==="));
-    println!("Устройство : {} ({})", h.device, h.source);
+    println!("{}", color(c, "1", "== 1. SSD HEALTH =="));
+    println!("Device    : {} ({})", h.device, h.source);
     println!(
-        "Модель     : {}  s/n {}",
+        "Model     : {}  s/n {}",
         if h.model.is_empty() { "n/a" } else { &h.model },
         if h.serial.is_empty() {
             "n/a"
@@ -75,12 +80,12 @@ pub fn print_text(r: &Report, explain: bool) {
         }
     );
     println!(
-        "Транспорт : {} | тип: {} | объём: {}",
+        "Transport : {} | type: {} | size: {}",
         h.transport,
         match h.is_ssd {
             Some(true) => "SSD (NAND)",
-            Some(false) => "HDD (вращающийся)",
-            None => "неизвестно",
+            Some(false) => "HDD (rotating)",
+            None => "unknown",
         },
         fmt_bytes(h.capacity_bytes)
     );
@@ -93,13 +98,13 @@ pub fn print_text(r: &Report, explain: bool) {
         .map(|p| format!("{p:.0}%"))
         .unwrap_or_else(|| "n/a".into());
     let spare = match (h.available_spare, h.spare_threshold) {
-        (Some(s), Some(t)) => format!("{s:.0}% (порог {t:.0}%)"),
-        (None, _) if h.transport == "sata" => "n/a (нет данных SATA)".into(),
+        (Some(s), Some(t)) => format!("{s:.0}% (threshold {t:.0}%)"),
+        (None, _) if h.transport == "sata" => "n/a (no SATA data)".into(),
         _ => "n/a".into(),
     };
-    println!("Температура: {temp} | износ (percentage_used): {wear} | запас: {spare}");
+    println!("Temperature : {temp} | wear (percentage_used): {wear} | spare: {spare}");
     println!(
-        "Наработка : {} ч | включений: {} | небезопасных выключений: {}",
+        "Power-on hours : {} | power cycles : {} | unsafe shutdowns : {}",
         h.power_on_hours
             .map(|v| v.to_string())
             .unwrap_or_else(|| "n/a".into()),
@@ -119,13 +124,13 @@ pub fn print_text(r: &Report, explain: bool) {
         .realloc_sectors
         .map(|v| v.to_string())
         .unwrap_or_else(|| "n/a".into());
-    println!("Ошибки    : media/uncorr = {media} | reallocated = {realloc}");
+    println!("Errors     : media/uncorr = {media} | reallocated = {realloc}");
     println!(
         "SMART     : {}",
         match h.smart_passed {
             Some(true) => color(c, "32", "PASSED"),
             Some(false) => color(c, "31", "FAILED"),
-            None => "нет данных".into(),
+            None => "no data".into(),
         }
     );
     let (state_str, color_code) = match a.state {
@@ -133,103 +138,101 @@ pub fn print_text(r: &Report, explain: bool) {
         DriveState::Warning => ("WARNING", "33"),
         DriveState::Critical => ("CRITICAL", "31"),
     };
-    println!("Состояние : {}", color(c, color_code, state_str));
+    println!("State     : {}", color(c, color_code, state_str));
     for r in &a.state_reasons {
         println!("  - {r}");
     }
     for n in &h.notes {
-        println!("  {} {n}", color(c, "33", "примечание:"));
+        println!("  {} {n}", color(c, "33", "note:"));
     }
 
     println!();
-    println!("{}", color(c, "1", "=== 2. РИСК ПОТЕРИ ДАННЫХ (ML) ==="));
-    let pct = r.risk.probability * 100.0;
-    let (level_str, level_code) = match a.risk_level {
-        RiskLevel::Low => ("низкий", "32"),
-        RiskLevel::Medium => ("средний", "33"),
-        RiskLevel::High => ("высокий", "31"),
-        RiskLevel::Critical => ("критический", "31;1"),
-    };
-    println!(
-        "Вероятность отказа с потерей данных: {}% — {} риск",
-        color(c, "1", &format!("{pct:.1}")),
-        color(c, level_code, level_str)
-    );
-    println!(
-        "Движок    : {} (ONNX-модель на датасете Alibaba DSN'21, вшита в бинарник)",
-        r.risk.engine
-    );
+    println!("{}", color(c, "1", "== 2. DATA LOSS RISK (ML) =="));
     if let Some(e) = &r.risk.error {
         println!(
-            "  {}/ ONNX недоступен, применена формула: {e}",
-            color(c, "33", "предупреждение")
+            "Data loss probability: n/a — {}",
+            color(c, "33", e)
+        );
+    } else {
+        let pct = r.risk.probability * 100.0;
+        let (level_str, level_code) = match a.risk_level {
+            RiskLevel::Low => ("low", "32"),
+            RiskLevel::Medium => ("medium", "33"),
+            RiskLevel::High => ("high", "31"),
+            RiskLevel::Critical => ("critical", "31;1"),
+        };
+        println!(
+            "Data loss probability: {}% — {} risk",
+            color(c, "1", &format!("{pct:.1}")),
+            color(c, level_code, level_str)
+        );
+        println!(
+            "Engine     : {} (ONNX model on Alibaba DSN'21 dataset, embedded in binary)",
+            r.risk.engine
         );
     }
+    println!("  {} {}", color(c, "33", "note:"), r.model_caveat);
     if explain {
         let t = crate::infer::risk_thresholds();
         println!(
-            "Уровни    : низкий <{:.2} ≤ средний <{:.2} ≤ высокий <{:.2} ≤ критический \
-             (пороги выведены на тестовой выборке модели)",
+            "Levels    : low <{:.2} <= medium <{:.2} <= high <{:.2} <= critical \
+             (cut-offs from held-out model test split)",
             t.medium, t.high, t.critical
         );
     }
-    if r.risk.approx_explain {
+    if !r.risk.error.is_some() && r.risk.approx_explain {
         println!(
-            "Вклады    : условные — линейное приближение даёт {:.1}%, бустинг {:.1}% \
-             (смотрите направление вкладов, а не величину)",
+            "Contributions : conditional — linear approximation {:.1}%, boosting {:.1}% \
+             (check directions, not magnitudes)",
             r.risk.proxy_probability * 100.0,
-            pct
+            r.risk.probability * 100.0,
         );
     }
-    println!("Ключевые факторы риска:");
-    let shown = if explain { 10 } else { 5 };
-    for contrib in r.risk.contributions.iter().take(shown) {
-        println!(
-            "  {:>15} = {:.3} (w {:+.2}, вклад в log-odds {:+.2})",
-            contrib.feature, contrib.value, contrib.weight, contrib.impact
-        );
-    }
-    if explain {
-        let feats: Vec<f32> = r.features.iter().map(|(_, v)| *v).collect();
-        let mut fake = [0.0f32; 8];
-        for (i, v) in feats.iter().enumerate().take(8) {
-            fake[i] = *v;
-        }
-        println!("Все признаки: {}", features::describe(&fake));
+    println!("Key risk factors (model relies on):");
+    if r.risk.error.is_none() {
         let gi = crate::infer::global_importance();
-        if !gi.is_empty() {
-            let top: Vec<String> = gi
-                .iter()
-                .filter(|g| g.importance > 0.0)
-                .take(5)
-                .map(|g| format!("{} {:.3}", g.feature, g.importance))
-                .collect();
-            if !top.is_empty() {
+        let shown = if explain { gi.len() } else { 5 };
+        for g in gi.iter().take(shown).filter(|g| g.importance > 0.0) {
+            println!(
+                "  {:>15} — importance {:.4} (PR-AUC drop)",
+                g.feature, g.importance
+            );
+        }
+        if explain {
+            println!();
+            println!("Feature contributions for this device (linear approximation):");
+            for contrib in r.risk.contributions.iter().take(8) {
                 println!(
-                    "Значимость для модели (permutation, падение PR-AUC): {}",
-                    top.join(", ")
+                    "  {:>15} = {:.3} (w {:+.2}, log-odds {:+.2})",
+                    contrib.feature, contrib.value, contrib.weight, contrib.impact
                 );
             }
+            let feats: Vec<f32> = r.features.iter().map(|(_, v)| *v).collect();
+            let mut fake = [0.0f32; 8];
+            for (i, v) in feats.iter().enumerate().take(8) {
+                fake[i] = *v;
+            }
+            println!("All features: {}", features::describe(&fake));
         }
     }
 
     println!();
     println!(
         "{}",
-        color(c, "1", "=== 3. ВОЗМОЖНОСТЬ ВОССТАНОВЛЕНИЯ ДАННЫХ ===")
+        color(c, "1", "== 3. DATA RECOVERY FEASIBILITY ==")
     );
     let (feas_str, feas_code) = match a.recovery.feasibility {
-        Feasibility::High => ("ВЫСОКАЯ", "32"),
-        Feasibility::Medium => ("СРЕДНЯЯ", "33"),
-        Feasibility::Low => ("НИЗКАЯ", "31"),
+        Feasibility::High => ("HIGH", "32"),
+        Feasibility::Medium => ("MEDIUM", "33"),
+        Feasibility::Low => ("LOW", "31"),
     };
-    println!("Оценка: {}", color(c, feas_code, feas_str));
+    println!("Assessment: {}", color(c, feas_code, feas_str));
     println!("{}", a.recovery.explanation);
 
     println!();
     println!(
         "{}",
-        color(c, "1", "=== 4. РЕКОМЕНДАЦИИ ПО ВОССТАНОВЛЕНИЮ ===")
+        color(c, "1", "== 4. RECOVERY RECOMMENDATIONS ==")
     );
     for (i, step) in a.recovery.steps.iter().enumerate() {
         println!("  {}. {step}", i + 1);
@@ -241,30 +244,30 @@ pub fn print_text(r: &Report, explain: bool) {
         color(
             c,
             "1",
-            "=== 5. БЕЗВОЗВРАТНОЕ УДАЛЕНИЕ ДАННЫХ (отдельный блок) ==="
+            "== 5. UNRECOVERABLE DATA ERASURE (separate block) =="
         )
     );
     let (verdict_str, verdict_code) = match a.erase.verdict {
         EraseVerdict::Yes => (
-            "ДА — данные можно уничтожить без возможности восстановления",
+            "YES — data can be destroyed with no recovery possible",
             "32",
         ),
         EraseVerdict::Partial => (
-            "ЧАСТИЧНО — логически недоступны, физические остатки возможны",
+            "PARTIALLY — logically inaccessible, physical remnants may remain",
             "33",
         ),
-        EraseVerdict::No => ("НЕТ — надёжного способа нет", "31"),
+        EraseVerdict::No => ("NO — no reliable method available", "31"),
     };
     println!(
-        "Возможно ли удалить данные без восстановления: {}",
+        "Erase without recovery: {}",
         color(c, verdict_code, verdict_str)
     );
     println!("{}", a.erase.summary);
-    println!("Методы (smartly-rs ничего НЕ выполняет автоматически):");
+    println!("Methods (smartly-rs never executes anything automatically):");
     for m in &a.erase.methods {
         println!("  - {m}");
     }
-    println!("Предупреждения:");
+    println!("Warnings:");
     for w in &a.erase.warnings {
         println!("  ! {w}");
     }

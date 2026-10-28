@@ -1,11 +1,11 @@
 //! Risk inference: runs the embedded ONNX model
-//! (`assets/risk_model.onnx`, trained on the Alibaba DSN'21 SSD dataset)
+//! (`assets/risk/risk_model.onnx`, trained on the Alibaba DSN'21 SSD dataset)
 //! and produces an explainable result.
 //!
 //! The exported graph wins a model-selection step between logistic
 //! regression and a histogram gradient-boosting ensemble (see
-//! `assets/train_metrics.json`). Explanations always come from the logistic
-//! coefficients in `assets/risk_coefficients.json`; when the exported model
+//! `assets/risk/train_metrics.json`). Explanations always come from the logistic
+//! coefficients in `assets/risk/risk_coefficients.json`; when the exported model
 //! is the tree ensemble those contributions are an approximation
 //! (`approx_explain: true` in the JSON).
 
@@ -14,17 +14,17 @@ use serde::Serialize;
 use crate::features::FEATURE_NAMES;
 
 /// The trained model, embedded into the binary.
-static MODEL_BYTES: &[u8] = include_bytes!("../assets/risk_model.onnx");
+static MODEL_BYTES: &[u8] = include_bytes!("../assets/risk/risk_model.onnx");
 /// Learned coefficients, used to explain and (if ONNX fails) to fall back.
-static COEFFICIENTS: &str = include_str!("../assets/risk_coefficients.json");
+static COEFFICIENTS: &str = include_str!("../assets/risk/risk_coefficients.json");
 
 #[derive(Debug, Clone, Copy, Serialize, serde::Deserialize)]
 pub struct RiskThresholds {
-    /// probability >= medium is "средний риск".
+    /// probability >= medium is "medium risk".
     pub medium: f64,
-    /// probability >= high is "высокий риск".
+    /// probability >= high is "high risk".
     pub high: f64,
-    /// probability >= critical is "критический риск".
+    /// probability >= critical is "critical risk".
     pub critical: f64,
 }
 

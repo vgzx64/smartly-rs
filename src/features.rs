@@ -1,6 +1,8 @@
 //! Extract the 8 normalized model features from a [`Health`] snapshot.
 //!
-//! Feature order must match `assets/train_risk_model.py` exactly.
+//! Feature order must match the shared 8-feature contract used by both
+//! `assets/risk/train_risk_model.py` (supervised 30-day risk) and
+//! `assets/normality/train_normal_model.py` (unsupervised normality).
 
 use crate::model::Health;
 
@@ -30,12 +32,13 @@ fn popcount(mut b: u8) -> u32 {
 }
 
 /// Build the feature vector `[f32; 8]` for the risk model.
+///
+/// Normalization formulas match `docs/dataset.md` (Alibaba DSN'21 contract).
 pub fn extract(h: &Health) -> [f32; 8] {
+    // pct_used: (100 − life_left) / 100
     let pct_used = clamp01(h.percentage_used.unwrap_or(0.0) / 100.0);
 
-    // How close the spare blocks are to their threshold:
-    // 0 = spare at 100%, 1 = spare at/below threshold.
-    // For SATA (no spare metric) approximate with consumed life.
+    // spare_deficit: 1 − (spare − thr) / (100 − thr); SATA fallback → pct_used.
     let spare_deficit = match (h.available_spare, h.spare_threshold) {
         (Some(spare), Some(thr)) => {
             let span = (100.0 - thr).max(1.0);
@@ -44,25 +47,29 @@ pub fn extract(h: &Health) -> [f32; 8] {
         _ => pct_used,
     };
 
+    // media_err: log10(1 + x) / 5  (SATA: uncorrectable + pending sectors)
     let media_err = match h.media_errors {
         Some(m) => clamp01((1.0 + m as f64).log10() / 5.0),
         None => {
-            // SATA: combine uncorrectable + pending + reallocated as errors.
             let e = h.uncorr_errors.unwrap_or(0) + h.pending_sectors.unwrap_or(0);
             clamp01((1.0 + e as f64).log10() / 5.0)
         }
     };
 
+    // temp: (T − 30) / 60
     let temp = clamp01((h.temperature_c.unwrap_or(30.0) - 30.0) / 60.0);
 
+    // poh: log10(1 + x) / log10(1 + 87600)  (~10 years of power-on hours)
     let poh =
         clamp01((1.0 + h.power_on_hours.unwrap_or(0) as f64).log10() / (1.0f64 + 87_600.0).log10());
 
+    // crit_warn: popcount(bits) / 5
     let crit_warn = match h.critical_warning {
         Some(cw) => clamp01(popcount(cw) as f64 / 5.0),
         None => 0.0,
     };
 
+    // realloc: log10(1 + x) / 6
     let realloc = clamp01((1.0 + h.realloc_sectors.unwrap_or(0) as f64).log10() / 6.0);
 
     let smart_fail = if h.smart_passed == Some(false) {
